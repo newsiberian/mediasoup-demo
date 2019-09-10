@@ -2,6 +2,8 @@ node_modules/
 
 /server/config.*
 !/server/config.example.js
+/server/yarn.lock
+/server/package-lock.json
 /server/public/
 /server/certs/
 !/server/certs/mediasoup-demo.localhost.*

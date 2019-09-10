@@ -214,6 +214,7 @@ class Room extends EventEmitter
 		peer.data.consume = consume;
 		peer.data.joined = false;
 		peer.data.displayName = undefined;
+		peer.data.settings = undefined;
 		peer.data.device = undefined;
 		peer.data.rtpCapabilities = undefined;
 		peer.data.sctpCapabilities = undefined;
@@ -298,7 +299,13 @@ class Room extends EventEmitter
 	 * @type {Object} [device] - Additional info with name, version and flags fields.
 	 * @type {RTCRtpCapabilities} [rtpCapabilities] - Device RTP capabilities.
 	 */
-	async createBroadcaster({ id, displayName, device = {}, rtpCapabilities })
+	async createBroadcaster({
+		id,
+		displayName,
+		settings = {},
+		device = {},
+		rtpCapabilities
+	})
 	{
 		if (typeof id !== 'string' || !id)
 			throw new TypeError('missing body.id');
@@ -318,6 +325,7 @@ class Room extends EventEmitter
 			data :
 			{
 				displayName,
+				settings,
 				device :
 				{
 					flag    : 'broadcaster',
@@ -342,6 +350,7 @@ class Room extends EventEmitter
 				{
 					id          : broadcaster.id,
 					displayName : broadcaster.data.displayName,
+					settings    : broadcaster.data.settings,
 					device      : broadcaster.data.device
 				})
 				.catch(() => {});
@@ -360,6 +369,7 @@ class Room extends EventEmitter
 				{
 					id          : joinedPeer.id,
 					displayName : joinedPeer.data.displayName,
+					settings    : joinedPeer.data.settings,
 					device      : joinedPeer.data.device,
 					producers   : []
 				};
@@ -734,6 +744,7 @@ class Room extends EventEmitter
 
 				const {
 					displayName,
+					settings,
 					device,
 					rtpCapabilities,
 					sctpCapabilities
@@ -741,6 +752,7 @@ class Room extends EventEmitter
 
 				// Store client data into the protoo Peer data object.
 				peer.data.displayName = displayName;
+				peer.data.settings = settings;
 				peer.data.device = device;
 				peer.data.rtpCapabilities = rtpCapabilities;
 				peer.data.sctpCapabilities = sctpCapabilities;
@@ -761,6 +773,7 @@ class Room extends EventEmitter
 						{
 							id          : joinedPeer.id,
 							displayName : joinedPeer.data.displayName,
+							settings    : joinedPeer.data.settings,
 							device      : joinedPeer.data.device
 						});
 
@@ -811,6 +824,7 @@ class Room extends EventEmitter
 						{
 							id          : peer.id,
 							displayName : peer.data.displayName,
+							settings    : peer.data.settings,
 							device      : peer.data.device
 						})
 						.catch(() => {});
@@ -1198,6 +1212,38 @@ class Room extends EventEmitter
 						})
 						.catch(() => {});
 				}
+
+				accept();
+
+				break;
+			}
+
+			case 'changeSettings': {
+				// Ensure the Peer is joined.
+				if (!peer.data.joined)
+					throw new Error('Peer not yet joined');
+
+				const { settings } = request.data;
+
+				// Store the display name into the custom data Object of the protoo
+				// Peer.
+				peer.data.settings = {
+					...peer.data.settings,
+					...settings
+				};
+
+				// Notify other joined Peers.
+				Promise.all(this._getJoinedPeers({ excludePeer: peer }).map((otherPeer) =>
+					otherPeer.notify(
+						'peerSettingsChanged',
+						{
+							peerId : peer.id,
+							settings
+						})
+				)).catch((err) =>
+				{
+					logger.error(err.stack);
+				});
 
 				accept();
 
